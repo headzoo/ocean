@@ -29,6 +29,8 @@ package ocean
 import (
 	"io"
 	"strings"
+	"errors"
+	"fmt"
 )
 
 // Split splits a string in to a slice of strings, based upon shell-style rules for
@@ -49,4 +51,9 @@ func Split(s string) ([]TokenValue, error) {
 	}
 
 	return subStrings, nil
+}
+
+// errorf returns a new error with a formatted message.
+func errorf(format string, a... interface{}) error {
+	return errors.New(fmt.Sprintf(format, a...))
 }

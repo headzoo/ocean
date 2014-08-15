@@ -15,11 +15,11 @@ limitations under the License.
 */
 package ocean
 
-// RuneType is the type of a UTF-8 character; a character, quote, space, escape.
-type RuneType string
+// RuneClass is the type of a UTF-8 character; a character, quote, space, escape.
+type RuneClass string
 
-// RuneTypeMap is a map of RuneTokeType values.
-type RuneTypeMap map[rune]RuneType
+// RuneClassMap is a map of RuneTokeType values.
+type RuneClassMap map[rune]RuneClass
 
 const (
 	CLASS_CHAR              string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#._-,/@$*()+=:;&^%~"
@@ -30,28 +30,28 @@ const (
 	CLASS_PIPE              string = "|"
 	CLASS_REDIRECT          string = "><"
 
-	RUNE_UNKNOWN      RuneType = "UNKNOWN"
-	RUNE_CHAR         RuneType = "CHAR"
-	RUNE_SPACE        RuneType = "SPACE"
-	RUNE_QUOTE_DOUBLE RuneType = "QUOTE_DOUBLE"
-	RUNE_QUOTE_SINGLE RuneType = "QUOTE_SINGLE"
-	RUNE_ESCAPE       RuneType = "ESCAPE"
-	RUNE_PIPE         RuneType = "PIPE"
-	RUNE_REDIRECT     RuneType = "REDIRECT"
-	RUNE_EOF          RuneType = "EOF"
+	RUNE_UNKNOWN      RuneClass = "UNKNOWN"
+	RUNE_CHAR         RuneClass = "CHAR"
+	RUNE_SPACE        RuneClass = "SPACE"
+	RUNE_QUOTE_DOUBLE RuneClass = "QUOTE_DOUBLE"
+	RUNE_QUOTE_SINGLE RuneClass = "QUOTE_SINGLE"
+	RUNE_ESCAPE       RuneClass = "ESCAPE"
+	RUNE_PIPE         RuneClass = "PIPE"
+	RUNE_REDIRECT     RuneClass = "REDIRECT"
+	RUNE_EOF          RuneClass = "EOF"
 )
 
 // Classifier classifies runes by type. This allows for different sorts of
 // classifiers - those accepting extended non-ascii chars, or strict posix
 // compatibility, for example.
 type Classifier struct {
-	typeMap RuneTypeMap
+	typeMap RuneClassMap
 }
 
 // Create and returns a new rune classifier.
 func NewClassifier() *Classifier {
 	classifier := &Classifier{
-		typeMap: make(RuneTypeMap),
+		typeMap: make(RuneClassMap),
 	}
 
 	classifier.AddClassification(CLASS_CHAR, RUNE_CHAR)
@@ -66,12 +66,12 @@ func NewClassifier() *Classifier {
 }
 
 // Classify returns the rune token type.
-func (classifier *Classifier) Classify(r rune) RuneType {
+func (classifier *Classifier) Classify(r rune) RuneClass {
 	return classifier.typeMap[r]
 }
 
 // addRuneClass registers a rune and it's classification.
-func (classifier *Classifier) AddClassification(runes string, runeType RuneType) {
+func (classifier *Classifier) AddClassification(runes string, runeType RuneClass) {
 	for _, r := range runes {
 		classifier.typeMap[r] = runeType
 	}

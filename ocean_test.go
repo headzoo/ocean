@@ -22,7 +22,7 @@ import (
 
 func TestClassifier(test *testing.T) {
 	classifier := NewClassifier()
-	runeTests := RuneTypeMap{
+	runeTests := RuneClassMap{
 		'a':  RUNE_CHAR,
 		' ':  RUNE_SPACE,
 		'"':  RUNE_QUOTE_DOUBLE,

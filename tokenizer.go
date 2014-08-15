@@ -17,8 +17,8 @@ package ocean
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
-	"fmt"
 	"io"
 )
 
@@ -46,8 +46,6 @@ const (
 	STATE_QUOTED          TokenState = 5
 	STATE_COMMENT         TokenState = 6
 	STATE_EMIT            TokenState = 7
-
-	INITIAL_TOKEN_CAPACITY = 100
 )
 
 // Token represents a single "token" found within a stream.
@@ -82,32 +80,26 @@ func NewTokenizer(reader io.Reader) *Tokenizer {
 // tokens available, the error value will be io.EOF.
 func (tokenizer *Tokenizer) NextToken() (*Token, error) {
 	var (
-		err          error
-		nextRune     rune
-		nextRuneType RuneType
-		tokenType    TokenClass
+		err       error
+		next      rune
+		class     RuneClass
+		tokenType TokenClass
 	)
 
 	state := STATE_START
-	value := make([]rune, 0, INITIAL_TOKEN_CAPACITY)
+	buffer := bytes.NewBuffer(make([]byte, 0, 1000))
 
 SCAN:
 	for state != STATE_EMIT {
-		nextRune, _, err = tokenizer.input.ReadRune()
-		nextRuneType = tokenizer.classifier.Classify(nextRune)
+		next, class, err = tokenizer.readRune()
 		if err != nil {
-			if err == io.EOF {
-				nextRuneType = RUNE_EOF
-				err = nil
-			} else {
-				return nil, err
-			}
+			return nil, err
 		}
 
 		switch state {
 		case STATE_START: // no runes read yet
 			{
-				switch nextRuneType {
+				switch class {
 				case RUNE_EOF:
 					{
 						return nil, io.EOF
@@ -115,7 +107,7 @@ SCAN:
 				case RUNE_CHAR:
 					{
 						tokenType = TOKEN_WORD
-						value = append(value, nextRune)
+						buffer.WriteRune(next)
 						state = STATE_WORD
 					}
 				case RUNE_SPACE:
@@ -139,49 +131,45 @@ SCAN:
 				case RUNE_PIPE:
 					{
 						tokenType = TOKEN_PIPE
-						value = append(value, nextRune)
+						buffer.WriteRune(next)
 						state = STATE_EMIT
 					}
 				case RUNE_REDIRECT:
 					{
 						tokenType = TOKEN_REDIRECT
-						value = append(value, nextRune)
-						nr, _, err := tokenizer.input.ReadRune()
-						if err != nil {
-							if err == io.EOF {
-								nextRuneType = RUNE_EOF
-								err = nil
-							} else {
-								return nil, err
-							}
-						}
-						if nr == nextRune {
-							value = append(value, nr)
-						} else {
-							tokenizer.input.UnreadRune()
-						}
+						buffer.WriteRune(next)
 						state = STATE_EMIT
+						
+						n, _, e := tokenizer.readRune()
+						if e != nil {
+							return nil, err
+						}
+						if n == next {
+							buffer.WriteRune(next)
+						} else {
+							tokenizer.unreadRune()
+						}
 					}
 				default:
 					{
-						return nil, errors.New(fmt.Sprintf("Unknown rune: %v", nextRune))
+						return nil, errorf("Unknown rune: %v", next)
 					}
 				}
 			}
 		case STATE_WORD: // in a regular word
 			{
-				switch nextRuneType {
+				switch class {
 				case RUNE_EOF:
 					{
 						break SCAN
 					}
 				case RUNE_CHAR:
 					{
-						value = append(value, nextRune)
+						buffer.WriteRune(next)
 					}
 				case RUNE_SPACE:
 					{
-						tokenizer.input.UnreadRune()
+						tokenizer.unreadRune()
 						break SCAN
 					}
 				case RUNE_QUOTE_DOUBLE:
@@ -198,23 +186,23 @@ SCAN:
 					}
 				case RUNE_PIPE:
 					{
-						tokenizer.input.UnreadRune()
+						tokenizer.unreadRune()
 						state = STATE_EMIT
 					}
 				case RUNE_REDIRECT:
 					{
-						tokenizer.input.UnreadRune()
+						tokenizer.unreadRune()
 						state = STATE_EMIT
 					}
 				default:
 					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
+						return nil, errorf("Uknown rune: %v", next)
 					}
 				}
 			}
 		case STATE_ESCAPING: // the next rune after an escape character
 			{
-				switch nextRuneType {
+				switch class {
 				case RUNE_EOF:
 					{
 						err = errors.New("EOF found after escape character")
@@ -224,17 +212,17 @@ SCAN:
 					RUNE_PIPE, RUNE_REDIRECT:
 					{
 						state = STATE_WORD
-						value = append(value, nextRune)
+						buffer.WriteRune(next)
 					}
 				default:
 					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
+						return nil, errorf("Uknown rune: %v", next)
 					}
 				}
 			}
 		case STATE_ESCAPING_QUOTED: // the next rune after an escape character, in double quotes
 			{
-				switch nextRuneType {
+				switch class {
 				case RUNE_EOF:
 					{
 						err = errors.New("EOF found after escape character")
@@ -244,17 +232,17 @@ SCAN:
 					RUNE_PIPE, RUNE_REDIRECT:
 					{
 						state = STATE_QUOTED_ESCAPING
-						value = append(value, nextRune)
+						buffer.WriteRune(next)
 					}
 				default:
 					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
+						return nil, errorf("Uknown rune: %v", next)
 					}
 				}
 			}
 		case STATE_QUOTED_ESCAPING: // in escaping double quotes
 			{
-				switch nextRuneType {
+				switch class {
 				case RUNE_EOF:
 					{
 						err = errors.New("EOF found when expecting closing quote.")
@@ -263,7 +251,7 @@ SCAN:
 				case RUNE_CHAR, RUNE_SPACE, RUNE_QUOTE_SINGLE,
 					RUNE_PIPE, RUNE_REDIRECT:
 					{
-						value = append(value, nextRune)
+						buffer.WriteRune(next)
 					}
 				case RUNE_QUOTE_DOUBLE:
 					{
@@ -275,13 +263,13 @@ SCAN:
 					}
 				default:
 					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
+						return nil, errorf("Uknown rune: %v", next)
 					}
 				}
 			}
 		case STATE_QUOTED: // in non-escaping single quotes
 			{
-				switch nextRuneType {
+				switch class {
 				case RUNE_EOF:
 					{
 						err = errors.New("EOF found when expecting closing quote.")
@@ -290,7 +278,7 @@ SCAN:
 				case RUNE_CHAR, RUNE_SPACE, RUNE_QUOTE_DOUBLE, RUNE_ESCAPE,
 					RUNE_PIPE, RUNE_REDIRECT:
 					{
-						value = append(value, nextRune)
+						buffer.WriteRune(next)
 					}
 				case RUNE_QUOTE_SINGLE:
 					{
@@ -298,13 +286,13 @@ SCAN:
 					}
 				default:
 					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
+						return nil, errorf("Uknown rune: %v", next)
 					}
 				}
 			}
 		case STATE_COMMENT:
 			{
-				switch nextRuneType {
+				switch class {
 				case RUNE_EOF:
 					{
 						break SCAN
@@ -312,29 +300,49 @@ SCAN:
 				case RUNE_CHAR, RUNE_QUOTE_DOUBLE, RUNE_ESCAPE,
 					RUNE_QUOTE_SINGLE, RUNE_PIPE, RUNE_REDIRECT:
 					{
-						value = append(value, nextRune)
+						buffer.WriteRune(next)
 					}
 				case RUNE_SPACE:
 					{
-						if nextRune == '\n' {
+						if next == '\n' {
 							state = STATE_START
 							break SCAN
 						} else {
-							value = append(value, nextRune)
+							buffer.WriteRune(next)
 						}
 					}
 				default:
 					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
+						return nil, errorf("Uknown rune: %v", next)
 					}
 				}
 			}
 		default:
 			{
-				panic(fmt.Sprintf("Unexpected state: %v", state))
+				panic(errorf("Unexpected state: %v", state))
 			}
 		}
 	}
 
-	return NewToken(tokenType, TokenValue(value)), err
+	return NewToken(tokenType, TokenValue(buffer.String())), err
+}
+
+// readRune returns the next rune in the stream.
+func (tokenizer *Tokenizer) readRune() (rune, RuneClass, error) {
+	next, _, err := tokenizer.input.ReadRune()
+	class := tokenizer.classifier.Classify(next)
+
+	if err != nil {
+		if err == io.EOF {
+			class = RUNE_EOF
+			err = nil
+		}
+	}
+
+	return next, class, err
+}
+
+// unread puts the previously read rune back into the stream.
+func (tokenizer *Tokenizer) unreadRune() {
+	tokenizer.input.UnreadRune()
 }
