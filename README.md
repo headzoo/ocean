@@ -1,6 +1,6 @@
 Ocean
 =====
-Ocean is a simple lexer for go that supports shell-style quoting, commenting, piping, redirecting, and escaping.
+A simple lexer for go that supports shell-style quoting, commenting, piping, redirecting, and escaping.
 
 
 ### Examples
