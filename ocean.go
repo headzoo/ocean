@@ -27,10 +27,10 @@ limitations under the License.
 package ocean
 
 import (
-	"io"
-	"strings"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
 )
 
 // Split splits a string in to a slice of strings, based upon shell-style rules for
@@ -54,6 +54,6 @@ func Split(s string) ([]TokenValue, error) {
 }
 
 // errorf returns a new error with a formatted message.
-func errorf(format string, a... interface{}) error {
+func errorf(format string, a ...interface{}) error {
 	return errors.New(fmt.Sprintf(format, a...))
 }

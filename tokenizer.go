@@ -139,7 +139,7 @@ SCAN:
 						tokenType = TOKEN_REDIRECT
 						buffer.WriteRune(next)
 						state = STATE_EMIT
-						
+
 						n, _, e := tokenizer.readRune()
 						if e != nil {
 							return nil, err
