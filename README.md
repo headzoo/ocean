@@ -4,7 +4,7 @@ A simple lexer for go that supports shell-style quoting, commenting, piping, red
 
 
 ### Examples
-```
+```go
 str := `one two three`
 val, _ := ocean.Tokenize(str)
 fmt.Printf("%q", val)
@@ -12,7 +12,7 @@ fmt.Printf("%q", val)
 ```
 
 
-```
+```go
 str := `one "two three"`
 val, _ := ocean.Tokenize(str)
 fmt.Printf("%q", val)
@@ -20,7 +20,7 @@ fmt.Printf("%q", val)
 ```
 
 
-```
+```go
 str := `one | two three`
 val, _ := ocean.Tokenize(str)
 fmt.Printf("%q", val)
@@ -28,7 +28,7 @@ fmt.Printf("%q", val)
 ```
 
 
-```
+```go
 str := `one | "two three" > output.txt`
 val, _ := ocean.Tokenize(str)
 fmt.Printf("%q", val)
