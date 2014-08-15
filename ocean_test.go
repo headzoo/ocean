@@ -1,5 +1,5 @@
 /*
-Copyright 2012 Google Inc. All Rights Reserved.
+Copyright 2014 Sean Hickey <sean@headzoo.io>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package ocean
 
 import (
@@ -21,175 +20,192 @@ import (
 	"testing"
 )
 
-func checkError(err error, t *testing.T) {
-	if err != nil {
-		t.Error(err)
+func TestClassifier(test *testing.T) {
+	classifier := NewClassifier()
+	runeTests := RuneTypeMap{
+		'a':  RUNE_CHAR,
+		' ':  RUNE_SPACE,
+		'"':  RUNE_QUOTE_DOUBLE,
+		'\'': RUNE_QUOTE_SINGLE,
+		'#':  RUNE_COMMENT,
+		'|':  RUNE_PIPE,
+		'>':  RUNE_REDIRECT,
 	}
-}
 
-func TestClassifier(t *testing.T) {
-	classifier := NewDefaultClassifier()
-	runeTests := map[int32]RuneTokenType{
-		'a':  RUNETOKEN_CHAR,
-		' ':  RUNETOKEN_SPACE,
-		'"':  RUNETOKEN_ESCAPING_QUOTE,
-		'\'': RUNETOKEN_NONESCAPING_QUOTE,
-		'#':  RUNETOKEN_COMMENT,
-		'|': RUNETOKEN_PIPE,
-		'>': RUNETOKEN_REDIRECT_OUT,
-		'<': RUNETOKEN_REDIRECT_IN,
-	}
-	for rune, expectedType := range runeTests {
-		foundType := classifier.ClassifyRune(rune)
-		if foundType != expectedType {
-			t.Logf("Expected type: %v for rune '%c'(%v). Found type: %v.", expectedType, rune, rune, foundType)
-			t.Fail()
+	for rune, expected := range runeTests {
+		actual := classifier.Classify(rune)
+		if actual != expected {
+			test.Error("Expected type: %v for rune '%c'(%v). Found type: %v.", expected, rune, rune, actual)
 		}
 	}
 }
 
-func TestTokenizer(t *testing.T) {
-	testInput := strings.NewReader("one two \"three four\" \"five \\\"six\\\"\" seven#eight # nine # ten\n eleven | sixteen > \"seventeen eighteen\" < nineteen")
-	expectedTokens := []*Token{
-		&Token{
+func TestTokenizer(test *testing.T) {
+	input := strings.NewReader("one two \"three four\" \"five \\\"six\\\"\" seven#eight # nine # ten\n eleven | sixteen > \"seventeen eighteen\" < nineteen")
+	expected := []Token{
+		{
 			tokenType: TOKEN_WORD,
 			value:     "one"},
-		&Token{
+		{
 			tokenType: TOKEN_WORD,
 			value:     "two"},
-		&Token{
+		{
 			tokenType: TOKEN_WORD,
 			value:     "three four"},
-		&Token{
+		{
 			tokenType: TOKEN_WORD,
 			value:     "five \"six\""},
-		&Token{
+		{
 			tokenType: TOKEN_WORD,
 			value:     "seven#eight"},
-		&Token{
+		{
 			tokenType: TOKEN_COMMENT,
 			value:     " nine # ten"},
-		&Token{
+		{
 			tokenType: TOKEN_WORD,
 			value:     "eleven"},
-		&Token{
+		{
 			tokenType: TOKEN_PIPE,
 			value:     "|"},
-		&Token{
+		{
 			tokenType: TOKEN_WORD,
 			value:     "sixteen"},
-		&Token{
-			tokenType: TOKEN_REDIRECT_OUT,
-			value:	   ">"},
-		&Token{
+		{
+			tokenType: TOKEN_REDIRECT,
+			value:     ">"},
+		{
 			tokenType: TOKEN_WORD,
 			value:     "seventeen eighteen"},
-		&Token{
-			tokenType: TOKEN_REDIRECT_IN,
+		{
+			tokenType: TOKEN_REDIRECT,
 			value:     "<"},
-		&Token{
+		{
 			tokenType: TOKEN_WORD,
 			value:     "nineteen"},
-		}
+	}
 
-	tokenizer, err := NewTokenizer(testInput)
-	checkError(err, t)
-	for _, expectedToken := range expectedTokens {
-		foundToken, err := tokenizer.NextToken()
-		checkError(err, t)
-		if !foundToken.Equal(expectedToken) {
-			t.Error("Expected token:", expectedToken, ". Found:", foundToken)
+	tokenizer, err := NewTokenizer(input)
+	assertNilError(err, test)
+
+	for _, ex := range expected {
+		actual, err := tokenizer.NextToken()
+		assertNilError(err, test)
+		if !actual.Equal(actual) {
+			test.Error("Expected token:", ex, ". Found:", actual)
 		}
 	}
 }
 
-func TestLexer(t *testing.T) {
-	testInput := strings.NewReader("one")
-	expectedWord := "one"
-	lexer, err := NewLexer(testInput)
-	checkError(err, t)
-	foundWord, err := lexer.NextWord()
-	checkError(err, t)
-	if expectedWord != foundWord {
-		t.Error("Expected word:", expectedWord, ". Found:", foundWord)
+func TestLexer(test *testing.T) {
+	input := strings.NewReader("one")
+	expected := TokenValue("one")
+
+	lexer, err := NewLexer(input)
+	assertNilError(err, test)
+
+	actual, err := lexer.NextWord()
+	assertNilError(err, test)
+
+	if expected != actual {
+		test.Error("Expected word:", expected, ". Found:", actual)
 	}
 }
 
-func TestSplitSimple(t *testing.T) {
+func TestSplitSimple(test *testing.T) {
 	assertSplit(
 		"one two three",
-		[]string{"one", "two", "three"},
-		t,
+		[]TokenValue{"one", "two", "three"},
+		test,
 	)
 }
 
-func TestSplitEscapingQuotes(t *testing.T) {
+func TestSplitEscapingQuotes(test *testing.T) {
 	assertSplit(
 		"one \"two three\" four",
-		[]string{"one", "two three", "four"},
-		t,
+		[]TokenValue{"one", "two three", "four"},
+		test,
 	)
 }
 
-func TestSplitNonEscapingQuotes(t *testing.T) {
+func TestSplitNonEscapingQuotes(test *testing.T) {
 	assertSplit(
 		"one 'two three' four",
-		[]string{"one", "two three", "four"},
-		t,
+		[]TokenValue{"one", "two three", "four"},
+		test,
 	)
 }
 
-func TestSplitPiped(t *testing.T) {
+func TestSplitPiped(test *testing.T) {
 	assertSplit(
 		"one two|three four",
-		[]string{"one", "two", "|", "three", "four"},
-		t,
+		[]TokenValue{"one", "two", "|", "three", "four"},
+		test,
 	)
 }
 
-func TestSplitRedirectOut(t *testing.T) {
+func TestSplitRedirectOut(test *testing.T) {
 	assertSplit(
 		"one two > three.txt",
-		[]string{"one", "two", ">", "three.txt"},
-		t,
+		[]TokenValue{"one", "two", ">", "three.txt"},
+		test,
 	)
 }
 
-func TestSplitRedirectIn(t *testing.T) {
+func TestSplitRedirectIn(test *testing.T) {
 	assertSplit(
 		"one < two.txt",
-		[]string{"one", "<", "two.txt"},
-		t,
+		[]TokenValue{"one", "<", "two.txt"},
+		test,
 	)
 }
+
 /*
-func TestSplitComplex(t *testing.T) {
+func TestSplitComplex(test *testing.T) {
 	assertSplit(
 		"ls -l /|grep 'foo.txt' >> saved.txt",
 		[]string{"ls", "-l", "/", "|", "grep", "foo.txt", ">>", "saved.txt"},
-		t,
+		test,
 	)
 }
 */
 
-
 // assertSplit splits the string, and asserts it's equal to the expected value.
-func assertSplit(input string, expected []string, t *testing.T) {
+func assertSplit(input string, expected []TokenValue, test *testing.T) {
 	actual, err := Split(input)
 	if err != nil {
-		t.Error("Split returned error:", err)
+		test.Error("Split returned error:", err)
 	}
-	assertSliceEquals(expected, actual, t)
+	assertTokenValueEquals(expected, actual, test)
 }
 
 // assertSliceEquals asserts that two slices are equal.
-func assertSliceEquals(expected, actual []string, t *testing.T) {
+func assertTokenValueEquals(expected, actual []TokenValue, test *testing.T) {
 	if len(expected) != len(actual) {
-		t.Error("Split expected:", len(expected), "results. Found:", len(actual), "results")
+		test.Error("Split expected:", len(expected), "results. Found:", len(actual), "results")
 	}
 	for i := range actual {
 		if actual[i] != expected[i] {
-			t.Error("Item:", i, "(", actual[i], ") differs from the expected value:", expected[i])
+			test.Error("Item:", i, "(", actual[i], ") differs from the expected value:", expected[i])
 		}
 	}
+}
+
+func assertNilError(err error, test *testing.T) {
+	if err != nil {
+		test.Error(err)
+	}
+}
+
+// Equal returns a boolean value indicating whether two tokens are equal.
+// Two tokens are equal if both their types and values are equal. A nil token can
+// never equal another token.
+func (a *Token) Equal(b *Token) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	if a.tokenType != b.tokenType {
+		return false
+	}
+
+	return a.value == b.value
 }

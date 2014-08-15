@@ -1,5 +1,16 @@
 /*
-Copyright 2012 Google Inc. All Rights Reserved.
+Ocean
+=====
+A simple lexer for go that supports shell-style quoting, commenting, piping,
+redirecting, and escaping.
+
+Code originally forked from go-shlex (http://code.google.com/p/go-shlex/).
+Contributions made by flynn/go-shlex (https://github.com/flynn/go-shlex).
+
+
+License
+=======
+Copyright 2014 Sean Hickey <sean@headzoo.io>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,504 +24,82 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package ocean
 
-/*
-Package ocean implements a simple lexer which splits input in to tokens using
-shell-style rules for quoting and commenting.
-*/
 import (
-	"bufio"
-	"errors"
-	"fmt"
 	"io"
 	"strings"
 )
 
-/*
-A TokenType is a top-level token; a word, space, comment, unknown.
-*/
+// TokenType is a top-level token; a word, space, comment, unknown.
 type TokenType int
 
-/*
-A RuneTokenType is the type of a UTF-8 character; a character, quote, space, escape.
-*/
-type RuneTokenType int
+// TokenValue is the value of the token, usually a string.
+type TokenValue string
 
-type lexerState int
+// RuneType is the type of a UTF-8 character; a character, quote, space, escape.
+type RuneType int
 
+// RuneTypeMap is a map of RuneTokeType values.
+type RuneTypeMap map[rune]RuneType
+
+// LexerState is used within the lexer state machine to keep track of the current state.
+type LexerState int
+
+// Token represents a single "token" found within a stream.
 type Token struct {
 	tokenType TokenType
-	value     string
-}
-
-/*
-Two tokens are equal if both their types and values are equal. A nil token can
-never equal another token.
-*/
-func (a *Token) Equal(b *Token) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	if a.tokenType != b.tokenType {
-		return false
-	}
-	return a.value == b.value
+	value     TokenValue
 }
 
 const (
-	RUNE_CHAR              string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-,/@$*()+=:;&^%~"
-	RUNE_SPACE             string = " \t\r\n"
-	RUNE_ESCAPING_QUOTE    string = "\""
-	RUNE_NONESCAPING_QUOTE string = "'"
-	RUNE_ESCAPE                   = "\\"
-	RUNE_COMMENT                  = "#"
-	RUNE_PIPE				      = "|"
-	RUNE_REDIRECT_OUT			  = ">"
-	RUNE_REDIRECT_IN              = "<"
+	CLASS_CHAR              = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-,/@$*()+=:;&^%~"
+	CLASS_SPACE             = " \t\r\n"
+	CLASS_ESCAPING_QUOTE    = "\""
+	CLASS_NONESCAPING_QUOTE = "'"
+	CLASS_ESCAPE            = "\\"
+	CLASS_COMMENT           = "#"
+	CLASS_PIPE              = "|"
+	CLASS_REDIRECT          = "><"
 
-	RUNETOKEN_UNKNOWN           RuneTokenType = 0
-	RUNETOKEN_CHAR              RuneTokenType = 1
-	RUNETOKEN_SPACE             RuneTokenType = 2
-	RUNETOKEN_ESCAPING_QUOTE    RuneTokenType = 3
-	RUNETOKEN_NONESCAPING_QUOTE RuneTokenType = 4
-	RUNETOKEN_ESCAPE            RuneTokenType = 5
-	RUNETOKEN_COMMENT           RuneTokenType = 6
-	RUNETOKEN_PIPE			    RuneTokenType = 7
-	RUNETOKEN_REDIRECT_OUT      RuneTokenType = 8
-	RUNETOKEN_REDIRECT_IN       RuneTokenType = 9
-	RUNETOKEN_APPEND_OUT        RuneTokenType = 10
-	RUNETOKEN_APPEND_IN         RuneTokenType = 11
-	RUNETOKEN_EOF               RuneTokenType = 12
+	RUNE_UNKNOWN      RuneType = 0
+	RUNE_CHAR         RuneType = 1
+	RUNE_SPACE        RuneType = 2
+	RUNE_QUOTE_DOUBLE RuneType = 3
+	RUNE_QUOTE_SINGLE RuneType = 4
+	RUNE_ESCAPE       RuneType = 5
+	RUNE_COMMENT      RuneType = 6
+	RUNE_PIPE         RuneType = 7
+	RUNE_REDIRECT     RuneType = 8
+	RUNE_EOF          RuneType = 9
 
-	TOKEN_UNKNOWN 		TokenType = 0
-	TOKEN_WORD    		TokenType = 1
-	TOKEN_SPACE   		TokenType = 2
-	TOKEN_COMMENT 		TokenType = 3
-	TOKEN_PIPE   		TokenType = 4
-	TOKEN_REDIRECT_OUT	TokenType = 5
-	TOKEN_REDIRECT_IN   TokenType = 6
+	TOKEN_UNKNOWN  TokenType = 0
+	TOKEN_WORD     TokenType = 1
+	TOKEN_SPACE    TokenType = 2
+	TOKEN_COMMENT  TokenType = 3
+	TOKEN_PIPE     TokenType = 4
+	TOKEN_REDIRECT TokenType = 5
 
-	STATE_START           lexerState = 0
-	STATE_INWORD          lexerState = 1
-	STATE_ESCAPING        lexerState = 2
-	STATE_ESCAPING_QUOTED lexerState = 3
-	STATE_QUOTED_ESCAPING lexerState = 4
-	STATE_QUOTED          lexerState = 5
-	STATE_COMMENT         lexerState = 6
-	STATE_EMIT            lexerState = 7
+	STATE_START           LexerState = 0
+	STATE_APPEND          LexerState = 1
+	STATE_ESCAPING        LexerState = 2
+	STATE_ESCAPING_QUOTED LexerState = 3
+	STATE_QUOTED_ESCAPING LexerState = 4
+	STATE_QUOTED          LexerState = 5
+	STATE_COMMENT         LexerState = 6
+	STATE_EMIT            LexerState = 7
 
-	INITIAL_TOKEN_CAPACITY int = 100
+	INITIAL_TOKEN_CAPACITY = 100
 )
 
-/*
-A type for classifying characters. This allows for different sorts of
-classifiers - those accepting extended non-ascii chars, or strict posix
-compatibility, for example.
-*/
-type TokenClassifier struct {
-	typeMap map[int32]RuneTokenType
-}
-
-func addRuneClass(typeMap *map[int32]RuneTokenType, runes string, tokenType RuneTokenType) {
-	for _, rune := range runes {
-		(*typeMap)[int32(rune)] = tokenType
-	}
-}
-
-/*
-Create a new classifier for basic ASCII characters.
-*/
-func NewDefaultClassifier() *TokenClassifier {
-	typeMap := map[int32]RuneTokenType{}
-	addRuneClass(&typeMap, RUNE_CHAR, RUNETOKEN_CHAR)
-	addRuneClass(&typeMap, RUNE_SPACE, RUNETOKEN_SPACE)
-	addRuneClass(&typeMap, RUNE_ESCAPING_QUOTE, RUNETOKEN_ESCAPING_QUOTE)
-	addRuneClass(&typeMap, RUNE_NONESCAPING_QUOTE, RUNETOKEN_NONESCAPING_QUOTE)
-	addRuneClass(&typeMap, RUNE_ESCAPE, RUNETOKEN_ESCAPE)
-	addRuneClass(&typeMap, RUNE_COMMENT, RUNETOKEN_COMMENT)
-	addRuneClass(&typeMap, RUNE_PIPE, RUNETOKEN_PIPE)
-	addRuneClass(&typeMap, RUNE_REDIRECT_OUT, RUNETOKEN_REDIRECT_OUT)
-	addRuneClass(&typeMap, RUNE_REDIRECT_IN, RUNETOKEN_REDIRECT_IN)
-	return &TokenClassifier{
-		typeMap: typeMap}
-}
-
-func (classifier *TokenClassifier) ClassifyRune(rune int32) RuneTokenType {
-	return classifier.typeMap[rune]
-}
-
-/*
-A type for turning an input stream in to a sequence of strings. Whitespace and
-comments are skipped.
-*/
-type Lexer struct {
-	tokenizer *Tokenizer
-}
-
-/*
-Create a new lexer.
-*/
-func NewLexer(r io.Reader) (*Lexer, error) {
-
-	tokenizer, err := NewTokenizer(r)
-	if err != nil {
-		return nil, err
-	}
-	lexer := &Lexer{tokenizer: tokenizer}
-	return lexer, nil
-}
-
-/*
-Return the next word, and an error value. If there are no more words, the error
-will be io.EOF.
-*/
-func (l *Lexer) NextWord() (string, error) {
-	var token *Token
-	var err error
-	for {
-		token, err = l.tokenizer.NextToken()
-		if err != nil {
-			return "", err
-		}
-		switch token.tokenType {
-		case TOKEN_WORD:
-			{
-				return token.value, nil
-			}
-		case TOKEN_COMMENT:
-			{
-				// skip comments
-			}
-		case TOKEN_PIPE:
-			{
-				return "|", nil
-			}
-		case TOKEN_REDIRECT_OUT:
-			{
-				return ">", nil
-			}
-		case TOKEN_REDIRECT_IN:
-			{
-				return "<", nil
-			}
-		default:
-			{
-				panic(fmt.Sprintf("Unknown token type: %v", token.tokenType))
-			}
-		}
-	}
-	return "", io.EOF
-}
-
-/*
-A type for turning an input stream in to a sequence of typed tokens.
-*/
-type Tokenizer struct {
-	input      *bufio.Reader
-	classifier *TokenClassifier
-}
-
-/*
-Create a new tokenizer.
-*/
-func NewTokenizer(r io.Reader) (*Tokenizer, error) {
-	input := bufio.NewReader(r)
-	classifier := NewDefaultClassifier()
-	tokenizer := &Tokenizer{
-		input:      input,
-		classifier: classifier}
-	return tokenizer, nil
-}
-
-/*
-Scan the stream for the next token.
-
-This uses an internal state machine. It will panic if it encounters a character
-which it does not know how to handle.
-*/
-func (t *Tokenizer) scanStream() (*Token, error) {
-	state := STATE_START
-	var tokenType TokenType
-	value := make([]int32, 0, INITIAL_TOKEN_CAPACITY)
-	var (
-		nextRune     int32
-		nextRuneType RuneTokenType
-		err          error
-	)
-SCAN:
-	for state != STATE_EMIT {
-		nextRune, _, err = t.input.ReadRune()
-		nextRuneType = t.classifier.ClassifyRune(nextRune)
-		if err != nil {
-			if err == io.EOF {
-				nextRuneType = RUNETOKEN_EOF
-				err = nil
-			} else {
-				return nil, err
-			}
-		}
-		
-		switch state {
-		case STATE_START: // no runes read yet
-			{
-				switch nextRuneType {
-				case RUNETOKEN_EOF:
-					{
-						return nil, io.EOF
-					}
-				case RUNETOKEN_CHAR:
-					{
-						tokenType = TOKEN_WORD
-						value = append(value, nextRune)
-						state = STATE_INWORD
-					}
-				case RUNETOKEN_SPACE:
-					{
-					}
-				case RUNETOKEN_ESCAPING_QUOTE:
-					{
-						tokenType = TOKEN_WORD
-						state = STATE_QUOTED_ESCAPING
-					}
-				case RUNETOKEN_NONESCAPING_QUOTE:
-					{
-						tokenType = TOKEN_WORD
-						state = STATE_QUOTED
-					}
-				case RUNETOKEN_ESCAPE:
-					{
-						tokenType = TOKEN_WORD
-						state = STATE_ESCAPING
-					}
-				case RUNETOKEN_COMMENT:
-					{
-						tokenType = TOKEN_COMMENT
-						state = STATE_COMMENT
-					}
-				case RUNETOKEN_PIPE:
-					{
-						tokenType = TOKEN_PIPE
-						value = append(value, nextRune)
-						state = STATE_EMIT
-					}
-				case RUNETOKEN_REDIRECT_OUT:
-					{
-						tokenType = TOKEN_REDIRECT_OUT
-						value = append(value, nextRune)
-						state = STATE_EMIT
-					}
-				case RUNETOKEN_REDIRECT_IN:
-					{
-						tokenType = TOKEN_REDIRECT_IN
-						value = append(value, nextRune)
-						state = STATE_EMIT
-					}
-				default:
-					{
-						return nil, errors.New(fmt.Sprintf("Unknown rune: %v", nextRune))
-					}
-				}
-			}
-		case STATE_INWORD: // in a regular word
-			{
-				switch nextRuneType {
-				case RUNETOKEN_EOF:
-					{
-						break SCAN
-					}
-				case RUNETOKEN_CHAR, RUNETOKEN_COMMENT:
-					{
-						value = append(value, nextRune)
-					}
-				case RUNETOKEN_SPACE:
-					{
-						t.input.UnreadRune()
-						break SCAN
-					}
-				case RUNETOKEN_ESCAPING_QUOTE:
-					{
-						state = STATE_QUOTED_ESCAPING
-					}
-				case RUNETOKEN_NONESCAPING_QUOTE:
-					{
-						state = STATE_QUOTED
-					}
-				case RUNETOKEN_ESCAPE:
-					{
-						state = STATE_ESCAPING
-					}
-				case RUNETOKEN_PIPE:
-					{
-						t.input.UnreadRune()
-						state = STATE_EMIT
-					}
-				case RUNETOKEN_REDIRECT_OUT:
-					{
-						t.input.UnreadRune()
-						state = STATE_EMIT
-					}
-				case RUNETOKEN_REDIRECT_IN:
-					{
-						t.input.UnreadRune()
-						state = STATE_EMIT
-					}
-				default:
-					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
-					}
-				}
-			}
-		case STATE_ESCAPING: // the next rune after an escape character
-			{
-				switch nextRuneType {
-				case RUNETOKEN_EOF:
-					{
-						err = errors.New("EOF found after escape character")
-						break SCAN
-					}
-				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_ESCAPE,
-				RUNETOKEN_COMMENT, RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
-					{
-						state = STATE_INWORD
-						value = append(value, nextRune)
-					}
-				default:
-					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
-					}
-				}
-			}
-		case STATE_ESCAPING_QUOTED: // the next rune after an escape character, in double quotes
-			{
-				switch nextRuneType {
-				case RUNETOKEN_EOF:
-					{
-						err = errors.New("EOF found after escape character")
-						break SCAN
-					}
-				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_ESCAPE,
-				RUNETOKEN_COMMENT, RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
-					{
-						state = STATE_QUOTED_ESCAPING
-						value = append(value, nextRune)
-					}
-				default:
-					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
-					}
-				}
-			}
-		case STATE_QUOTED_ESCAPING: // in escaping double quotes
-			{
-				switch nextRuneType {
-				case RUNETOKEN_EOF:
-					{
-						err = errors.New("EOF found when expecting closing quote.")
-						break SCAN
-					}
-				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_COMMENT,
-				RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
-					{
-						value = append(value, nextRune)
-					}
-				case RUNETOKEN_ESCAPING_QUOTE:
-					{
-						state = STATE_INWORD
-					}
-				case RUNETOKEN_ESCAPE:
-					{
-						state = STATE_ESCAPING_QUOTED
-					}
-				default:
-					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
-					}
-				}
-			}
-		case STATE_QUOTED: // in non-escaping single quotes
-			{
-				switch nextRuneType {
-				case RUNETOKEN_EOF:
-					{
-						err = errors.New("EOF found when expecting closing quote.")
-						break SCAN
-					}
-				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_ESCAPE,
-				RUNETOKEN_COMMENT, RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
-					{
-						value = append(value, nextRune)
-					}
-				case RUNETOKEN_NONESCAPING_QUOTE:
-					{
-						state = STATE_INWORD
-					}
-				default:
-					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
-					}
-				}
-			}
-		case STATE_COMMENT:
-			{
-				switch nextRuneType {
-				case RUNETOKEN_EOF:
-					{
-						break SCAN
-					}
-				case RUNETOKEN_CHAR, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_ESCAPE, RUNETOKEN_COMMENT,
-				RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
-					{
-						value = append(value, nextRune)
-					}
-				case RUNETOKEN_SPACE:
-					{
-						if nextRune == '\n' {
-							state = STATE_START
-							break SCAN
-						} else {
-							value = append(value, nextRune)
-						}
-					}
-				default:
-					{
-						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
-					}
-				}
-			}
-		default:
-			{
-				panic(fmt.Sprintf("Unexpected state: %v", state))
-			}
-		}
-	}
-	
-	token := &Token{
-		tokenType: tokenType,
-		value:     string(value)}
-	
-	return token, err
-}
-
-/*
-Return the next token in the stream, and an error value. If there are no more
-tokens available, the error value will be io.EOF.
-*/
-func (t *Tokenizer) NextToken() (*Token, error) {
-	return t.scanStream()
-}
-
-/*
-Split a string in to a slice of strings, based upon shell-style rules for
-quoting, escaping, and spaces.
-*/
-func Split(s string) ([]string, error) {
+// Split splits a string in to a slice of strings, based upon shell-style rules for
+// quoting, escaping, and spaces.
+func Split(s string) ([]TokenValue, error) {
 	l, err := NewLexer(strings.NewReader(s))
 	if err != nil {
 		return nil, err
 	}
-	subStrings := []string{}
+	subStrings := []TokenValue{}
 	for {
 		word, err := l.NextWord()
 		if err != nil {
@@ -521,5 +110,6 @@ func Split(s string) ([]string, error) {
 		}
 		subStrings = append(subStrings, word)
 	}
+
 	return subStrings, nil
 }
