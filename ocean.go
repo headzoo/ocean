@@ -35,7 +35,7 @@ import (
 
 // Split splits a string in to a slice of strings, based upon shell-style rules for
 // quoting, escaping, and spaces.
-func Split(s string) ([]TokenValue, error) {
+func Tokenize(s string) ([]TokenValue, error) {
 	lexer := NewLexer(strings.NewReader(s))
 	subStrings := []TokenValue{}
 
