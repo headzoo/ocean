@@ -41,7 +41,7 @@ func TestClassifier(test *testing.T) {
 }
 
 func TestTokenizer(test *testing.T) {
-	input := strings.NewReader("one two \"three four\" \"five \\\"six\\\"\" seven#eight # nine # ten\n eleven | sixteen > \"seventeen eighteen\" < nineteen")
+	input := strings.NewReader(`one two "three four" "five \"six\"" \n eleven | sixteen > "seventeen eighteen" < nineteen`)
 	expected := []Token{
 		{
 			tokenType: TOKEN_WORD,
@@ -54,13 +54,7 @@ func TestTokenizer(test *testing.T) {
 			value:     "three four"},
 		{
 			tokenType: TOKEN_WORD,
-			value:     "five \"six\""},
-		{
-			tokenType: TOKEN_WORD,
-			value:     "seven#eight"},
-		{
-			tokenType: TOKEN_COMMENT,
-			value:     " nine # ten"},
+			value:     `five \"six\"`},
 		{
 			tokenType: TOKEN_WORD,
 			value:     "eleven"},
@@ -91,7 +85,7 @@ func TestTokenizer(test *testing.T) {
 		actual, err := tokenizer.NextToken()
 		assertNilError(err, test)
 		if !actual.Equal(actual) {
-			test.Error("Expected token:", ex, ". Found:", actual)
+			test.Error("Expected: ", ex, ", Actual: ", actual)
 		}
 	}
 }
@@ -113,7 +107,7 @@ func TestLexer(test *testing.T) {
 
 func TestSplitSimple(test *testing.T) {
 	assertSplit(
-		"one two three",
+		`one two three`,
 		[]TokenValue{"one", "two", "three"},
 		test,
 	)
@@ -121,7 +115,7 @@ func TestSplitSimple(test *testing.T) {
 
 func TestSplitEscapingQuotes(test *testing.T) {
 	assertSplit(
-		"one \"two three\" four",
+		`one "two three" four`,
 		[]TokenValue{"one", "two three", "four"},
 		test,
 	)
@@ -129,7 +123,7 @@ func TestSplitEscapingQuotes(test *testing.T) {
 
 func TestSplitNonEscapingQuotes(test *testing.T) {
 	assertSplit(
-		"one 'two three' four",
+		`one 'two three' four`,
 		[]TokenValue{"one", "two three", "four"},
 		test,
 	)
@@ -137,7 +131,7 @@ func TestSplitNonEscapingQuotes(test *testing.T) {
 
 func TestSplitPiped(test *testing.T) {
 	assertSplit(
-		"one two|three four",
+		`one two|three four`,
 		[]TokenValue{"one", "two", "|", "three", "four"},
 		test,
 	)
@@ -145,7 +139,7 @@ func TestSplitPiped(test *testing.T) {
 
 func TestSplitRedirectOut(test *testing.T) {
 	assertSplit(
-		"one two > three.txt",
+		`one two > three.txt`,
 		[]TokenValue{"one", "two", ">", "three.txt"},
 		test,
 	)
@@ -153,21 +147,19 @@ func TestSplitRedirectOut(test *testing.T) {
 
 func TestSplitRedirectIn(test *testing.T) {
 	assertSplit(
-		"one < two.txt",
-		[]TokenValue{"one", "<", "two.txt"},
-		test,
-	)
+	`one < two.txt`,
+	[]TokenValue{"one", "<", "two.txt"},
+	test,
+)
 }
 
-/*
 func TestSplitComplex(test *testing.T) {
-	assertSplit(
-		"ls -l /|grep 'foo.txt' >> saved.txt",
-		[]string{"ls", "-l", "/", "|", "grep", "foo.txt", ">>", "saved.txt"},
+assertSplit(
+	`ls -l /|find << "find.txt" | grep 'foo.txt' >> saved.txt`,
+		[]TokenValue{"ls", "-l", "/", "|", "find", "<<", "find.txt", "|", "grep", "foo.txt", ">>", "saved.txt"},
 		test,
 	)
 }
-*/
 
 // assertSplit splits the string, and asserts it's equal to the expected value.
 func assertSplit(input string, expected []TokenValue, test *testing.T) {
@@ -182,6 +174,7 @@ func assertSplit(input string, expected []TokenValue, test *testing.T) {
 func assertTokenValueEquals(expected, actual []TokenValue, test *testing.T) {
 	if len(expected) != len(actual) {
 		test.Error("Split expected:", len(expected), "results. Found:", len(actual), "results")
+		return
 	}
 	for i := range actual {
 		if actual[i] != expected[i] {
