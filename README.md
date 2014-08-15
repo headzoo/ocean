@@ -21,7 +21,7 @@ fmt.Printf("%q", val)
 
 
 ```go
-str := `one | two three`
+str := `one|two three`
 val, _ := ocean.Tokenize(str)
 fmt.Printf("%q", val)
 // outputs: ["one", "|", "two", "three"]
