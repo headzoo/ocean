@@ -32,13 +32,13 @@ import (
 )
 
 // TokenType is a top-level token; a word, space, comment, unknown.
-type TokenType int
+type TokenType string
 
 // TokenValue is the value of the token, usually a string.
 type TokenValue string
 
 // RuneType is the type of a UTF-8 character; a character, quote, space, escape.
-type RuneType int
+type RuneType string
 
 // RuneTypeMap is a map of RuneTokeType values.
 type RuneTypeMap map[rune]RuneType
@@ -53,41 +53,29 @@ type Token struct {
 }
 
 const (
-	CLASS_CHAR              = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-,/@$*()+=:;&^%~"
+	CLASS_CHAR              = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#._-,/@$*()+=:;&^%~"
 	CLASS_SPACE             = " \t\r\n"
 	CLASS_ESCAPING_QUOTE    = "\""
 	CLASS_NONESCAPING_QUOTE = "'"
 	CLASS_ESCAPE            = "\\"
-	CLASS_COMMENT           = "#"
 	CLASS_PIPE              = "|"
 	CLASS_REDIRECT          = "><"
 
-	RUNE_UNKNOWN      RuneType = 0
-	RUNE_CHAR         RuneType = 1
-	RUNE_SPACE        RuneType = 2
-	RUNE_QUOTE_DOUBLE RuneType = 3
-	RUNE_QUOTE_SINGLE RuneType = 4
-	RUNE_ESCAPE       RuneType = 5
-	RUNE_COMMENT      RuneType = 6
-	RUNE_PIPE         RuneType = 7
-	RUNE_REDIRECT     RuneType = 8
-	RUNE_EOF          RuneType = 9
+	RUNE_UNKNOWN      RuneType = "UNKNOWN"
+	RUNE_CHAR         RuneType = "CHAR"
+	RUNE_SPACE        RuneType = "SPACE"
+	RUNE_QUOTE_DOUBLE RuneType = "QUOTE_DOUBLE"
+	RUNE_QUOTE_SINGLE RuneType = "QUOTE_SINGLE"
+	RUNE_ESCAPE       RuneType = "ESCAPE"
+	RUNE_PIPE         RuneType = "PIPE"
+	RUNE_REDIRECT     RuneType = "REDIRECT"
+	RUNE_EOF          RuneType = "EOF"
 
-	TOKEN_UNKNOWN  TokenType = 0
-	TOKEN_WORD     TokenType = 1
-	TOKEN_SPACE    TokenType = 2
-	TOKEN_COMMENT  TokenType = 3
-	TOKEN_PIPE     TokenType = 4
-	TOKEN_REDIRECT TokenType = 5
-
-	STATE_START           LexerState = 0
-	STATE_APPEND          LexerState = 1
-	STATE_ESCAPING        LexerState = 2
-	STATE_ESCAPING_QUOTED LexerState = 3
-	STATE_QUOTED_ESCAPING LexerState = 4
-	STATE_QUOTED          LexerState = 5
-	STATE_COMMENT         LexerState = 6
-	STATE_EMIT            LexerState = 7
+	TOKEN_UNKNOWN  TokenType = "UNKNOWN"
+	TOKEN_WORD     TokenType = "WORD"
+	TOKEN_SPACE    TokenType = "SPACE"
+	TOKEN_PIPE     TokenType = "PIPE"
+	TOKEN_REDIRECT TokenType = "REDIRECT"
 
 	INITIAL_TOKEN_CAPACITY = 100
 )

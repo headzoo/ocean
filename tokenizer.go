@@ -22,6 +22,17 @@ import (
 	"io"
 )
 
+const (
+	STATE_START           LexerState = 0
+	STATE_APPEND          LexerState = 1
+	STATE_ESCAPING        LexerState = 2
+	STATE_ESCAPING_QUOTED LexerState = 3
+	STATE_QUOTED_ESCAPING LexerState = 4
+	STATE_QUOTED          LexerState = 5
+	STATE_COMMENT         LexerState = 6
+	STATE_EMIT            LexerState = 7
+)
+
 // Tokenizer turns an input stream in to a sequence of typed tokens.
 type Tokenizer struct {
 	input      *bufio.Reader
@@ -99,21 +110,30 @@ SCAN:
 						tokenType = TOKEN_WORD
 						state = STATE_ESCAPING
 					}
-				case RUNE_COMMENT:
-					{
-						tokenType = TOKEN_COMMENT
-						state = STATE_COMMENT
-					}
 				case RUNE_PIPE:
 					{
 						tokenType = TOKEN_PIPE
-						value = append(value, nextRune)
+						value = append(value, nextRune)						
 						state = STATE_EMIT
 					}
 				case RUNE_REDIRECT:
 					{
 						tokenType = TOKEN_REDIRECT
 						value = append(value, nextRune)
+						nr, _, err := t.input.ReadRune()
+						if err != nil {
+							if err == io.EOF {
+								nextRuneType = RUNE_EOF
+								err = nil
+							} else {
+								return nil, err
+							}
+						}
+						if nr == nextRune {
+							value = append(value, nr)
+						} else {
+							t.input.UnreadRune()
+						}
 						state = STATE_EMIT
 					}
 				default:
@@ -129,7 +149,7 @@ SCAN:
 					{
 						break SCAN
 					}
-				case RUNE_CHAR, RUNE_COMMENT:
+				case RUNE_CHAR:
 					{
 						value = append(value, nextRune)
 					}
@@ -175,7 +195,7 @@ SCAN:
 						break SCAN
 					}
 				case RUNE_CHAR, RUNE_SPACE, RUNE_QUOTE_DOUBLE, RUNE_QUOTE_SINGLE, RUNE_ESCAPE,
-					RUNE_COMMENT, RUNE_PIPE, RUNE_REDIRECT:
+					RUNE_PIPE, RUNE_REDIRECT:
 					{
 						state = STATE_APPEND
 						value = append(value, nextRune)
@@ -195,7 +215,7 @@ SCAN:
 						break SCAN
 					}
 				case RUNE_CHAR, RUNE_SPACE, RUNE_QUOTE_DOUBLE, RUNE_QUOTE_SINGLE, RUNE_ESCAPE,
-					RUNE_COMMENT, RUNE_PIPE, RUNE_REDIRECT:
+					RUNE_PIPE, RUNE_REDIRECT:
 					{
 						state = STATE_QUOTED_ESCAPING
 						value = append(value, nextRune)
@@ -214,7 +234,7 @@ SCAN:
 						err = errors.New("EOF found when expecting closing quote.")
 						break SCAN
 					}
-				case RUNE_CHAR, RUNE_SPACE, RUNE_QUOTE_SINGLE, RUNE_COMMENT,
+				case RUNE_CHAR, RUNE_SPACE, RUNE_QUOTE_SINGLE,
 					RUNE_PIPE, RUNE_REDIRECT:
 					{
 						value = append(value, nextRune)
@@ -242,7 +262,7 @@ SCAN:
 						break SCAN
 					}
 				case RUNE_CHAR, RUNE_SPACE, RUNE_QUOTE_DOUBLE, RUNE_ESCAPE,
-					RUNE_COMMENT, RUNE_PIPE, RUNE_REDIRECT:
+					RUNE_PIPE, RUNE_REDIRECT:
 					{
 						value = append(value, nextRune)
 					}
@@ -263,7 +283,7 @@ SCAN:
 					{
 						break SCAN
 					}
-				case RUNE_CHAR, RUNE_QUOTE_DOUBLE, RUNE_ESCAPE, RUNE_COMMENT,
+				case RUNE_CHAR, RUNE_QUOTE_DOUBLE, RUNE_ESCAPE,
 					RUNE_QUOTE_SINGLE, RUNE_PIPE, RUNE_REDIRECT:
 					{
 						value = append(value, nextRune)

@@ -33,7 +33,6 @@ func NewClassifier() *Classifier {
 	classifier.AddClassification(CLASS_ESCAPING_QUOTE, RUNE_QUOTE_DOUBLE)
 	classifier.AddClassification(CLASS_NONESCAPING_QUOTE, RUNE_QUOTE_SINGLE)
 	classifier.AddClassification(CLASS_ESCAPE, RUNE_ESCAPE)
-	classifier.AddClassification(CLASS_COMMENT, RUNE_COMMENT)
 	classifier.AddClassification(CLASS_PIPE, RUNE_PIPE)
 	classifier.AddClassification(CLASS_REDIRECT, RUNE_REDIRECT)
 

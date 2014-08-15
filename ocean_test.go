@@ -27,7 +27,6 @@ func TestClassifier(test *testing.T) {
 		' ':  RUNE_SPACE,
 		'"':  RUNE_QUOTE_DOUBLE,
 		'\'': RUNE_QUOTE_SINGLE,
-		'#':  RUNE_COMMENT,
 		'|':  RUNE_PIPE,
 		'>':  RUNE_REDIRECT,
 	}

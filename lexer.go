@@ -55,10 +55,6 @@ func (lexer *Lexer) NextWord() (TokenValue, error) {
 			{
 				return token.value, nil
 			}
-		case TOKEN_COMMENT:
-			{
-				// skip comments
-			}
 		default:
 			{
 				panic(fmt.Sprintf("Unknown token type: %v", token.tokenType))
