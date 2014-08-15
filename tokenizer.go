@@ -37,7 +37,7 @@ const (
 	TOKEN_SPACE    TokenClass = "SPACE"
 	TOKEN_PIPE     TokenClass = "PIPE"
 	TOKEN_REDIRECT TokenClass = "REDIRECT"
-	
+
 	STATE_START           TokenState = 0
 	STATE_WORD            TokenState = 1
 	STATE_ESCAPING        TokenState = 2
@@ -139,7 +139,7 @@ SCAN:
 				case RUNE_PIPE:
 					{
 						tokenType = TOKEN_PIPE
-						value = append(value, nextRune)						
+						value = append(value, nextRune)
 						state = STATE_EMIT
 					}
 				case RUNE_REDIRECT:
@@ -335,7 +335,6 @@ SCAN:
 			}
 		}
 	}
-	
+
 	return NewToken(tokenType, TokenValue(value)), err
 }
-

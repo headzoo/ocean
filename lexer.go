@@ -44,7 +44,7 @@ func (lexer *Lexer) NextWord() (TokenValue, error) {
 		if err != nil {
 			return "", err
 		}
-		
+
 		switch token.Class {
 		case TOKEN_WORD, TOKEN_PIPE, TOKEN_REDIRECT:
 			{

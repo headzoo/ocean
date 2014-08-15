@@ -36,7 +36,7 @@ import (
 func Split(s string) ([]TokenValue, error) {
 	lexer := NewLexer(strings.NewReader(s))
 	subStrings := []TokenValue{}
-	
+
 	for {
 		word, err := lexer.NextWord()
 		if err != nil {

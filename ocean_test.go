@@ -119,15 +119,15 @@ func TestSplitRedirectOut(test *testing.T) {
 
 func TestSplitRedirectIn(test *testing.T) {
 	assertSplit(
-	`one < two.txt`,
-	[]TokenValue{"one", "<", "two.txt"},
-	test,
-)
+		`one < two.txt`,
+		[]TokenValue{"one", "<", "two.txt"},
+		test,
+	)
 }
 
 func TestSplitComplex(test *testing.T) {
-assertSplit(
-	`ls -l /|find << "find.txt" | grep 'foo.txt' >> saved.txt`,
+	assertSplit(
+		`ls -l /|find << "find.txt" | grep 'foo.txt' >> saved.txt`,
 		[]TokenValue{"ls", "-l", "/", "|", "find", "<<", "find.txt", "|", "grep", "foo.txt", ">>", "saved.txt"},
 		test,
 	)
