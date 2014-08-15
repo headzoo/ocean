@@ -1,6 +1,6 @@
 Ocean
 =====
-A simple lexer for go that supports shell-style quoting, commenting, piping, redirecting, and escaping.
+A simple lexer for go that supports shell-style quoting, commenting, piping, redirecting, and escaping. Ocean uses a simple state machine to tokenize a complete shell command into individual words and sentences. For example the shell command `ls -l . | grep "file name" > output.txt` is tokenized into the array `["ls", "-l", ".", "|", "grep", "file name", ">", "output.txt"]`. Note that Ocean does more than split the string on each splace. It's mindful of quotes and escaping.
 
 
 ### Examples
