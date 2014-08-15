@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package shlex
+package ocean
 
 /*
-Package shlex implements a simple lexer which splits input in to tokens using
+Package ocean implements a simple lexer which splits input in to tokens using
 shell-style rules for quoting and commenting.
 */
 import (
