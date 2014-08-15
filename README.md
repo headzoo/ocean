@@ -48,4 +48,4 @@ import "github.com/headzoo/ocean"
 
 
 ### Credits
-Ocean is an indirect fork of [go-shlex](http://code.google.com/p/go-shlex/) written by Steven Thurgood. Contributions were make by Jonathan Rudenberg through his fork [flynn/go-shlex](https://github.com/flynn/go-shlex).
+Ocean is an indirect fork of [go-shlex](http://code.google.com/p/go-shlex/) written by Steven Thurgood. Contributions were make by Jonathan Rudenberg through his fork at [flynn/go-shlex](https://github.com/flynn/go-shlex).
