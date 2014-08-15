@@ -22,39 +22,47 @@ import (
 	"io"
 )
 
-// TokenType is a top-level token; a word, space, comment, unknown.
-type TokenType string
+// TokenClass is a top-level token; a word, space, comment, unknown.
+type TokenClass string
 
 // TokenValue is the value of the token, usually a string.
 type TokenValue string
 
-// LexerState is used within the lexer state machine to keep track of the current state.
-type LexerState int
-
-// Token represents a single "token" found within a stream.
-type Token struct {
-	tokenType TokenType
-	value     TokenValue
-}
+// TokenState is used within the lexer state machine to keep track of the current state.
+type TokenState int
 
 const (
-	TOKEN_UNKNOWN  TokenType = "UNKNOWN"
-	TOKEN_WORD     TokenType = "WORD"
-	TOKEN_SPACE    TokenType = "SPACE"
-	TOKEN_PIPE     TokenType = "PIPE"
-	TOKEN_REDIRECT TokenType = "REDIRECT"
+	TOKEN_UNKNOWN  TokenClass = "UNKNOWN"
+	TOKEN_WORD     TokenClass = "WORD"
+	TOKEN_SPACE    TokenClass = "SPACE"
+	TOKEN_PIPE     TokenClass = "PIPE"
+	TOKEN_REDIRECT TokenClass = "REDIRECT"
 	
-	STATE_START           LexerState = 0
-	STATE_APPEND          LexerState = 1
-	STATE_ESCAPING        LexerState = 2
-	STATE_ESCAPING_QUOTED LexerState = 3
-	STATE_QUOTED_ESCAPING LexerState = 4
-	STATE_QUOTED          LexerState = 5
-	STATE_COMMENT         LexerState = 6
-	STATE_EMIT            LexerState = 7
+	STATE_START           TokenState = 0
+	STATE_WORD            TokenState = 1
+	STATE_ESCAPING        TokenState = 2
+	STATE_ESCAPING_QUOTED TokenState = 3
+	STATE_QUOTED_ESCAPING TokenState = 4
+	STATE_QUOTED          TokenState = 5
+	STATE_COMMENT         TokenState = 6
+	STATE_EMIT            TokenState = 7
 
 	INITIAL_TOKEN_CAPACITY = 100
 )
+
+// Token represents a single "token" found within a stream.
+type Token struct {
+	Class TokenClass
+	Value TokenValue
+}
+
+// Creates and returns a new Token instance.
+func NewToken(class TokenClass, value TokenValue) *Token {
+	return &Token{
+		Class: class,
+		Value: value,
+	}
+}
 
 // Tokenizer turns an input stream in to a sequence of typed tokens.
 type Tokenizer struct {
@@ -64,25 +72,20 @@ type Tokenizer struct {
 
 // Creates and returns a new tokenizer.
 func NewTokenizer(reader io.Reader) *Tokenizer {
-	input := bufio.NewReader(reader)
-	classifier := NewClassifier()
-	tokenizer := &Tokenizer{
-		input:      input,
-		classifier: classifier,
+	return &Tokenizer{
+		input:      bufio.NewReader(reader),
+		classifier: NewClassifier(),
 	}
-
-	return tokenizer
 }
 
-// scanStream scans the stream for the next token.
-// This uses an internal state machine. It will panic if it encounters a character
-// which it does not know how to handle.
-func (t *Tokenizer) scanStream() (*Token, error) {
+// NextToken returns the next token in the stream, and an error value. If there are no more
+// tokens available, the error value will be io.EOF.
+func (tokenizer *Tokenizer) NextToken() (*Token, error) {
 	var (
-		tokenType    TokenType
+		err          error
 		nextRune     rune
 		nextRuneType RuneType
-		err          error
+		tokenType    TokenClass
 	)
 
 	state := STATE_START
@@ -90,8 +93,8 @@ func (t *Tokenizer) scanStream() (*Token, error) {
 
 SCAN:
 	for state != STATE_EMIT {
-		nextRune, _, err = t.input.ReadRune()
-		nextRuneType = t.classifier.Classify(nextRune)
+		nextRune, _, err = tokenizer.input.ReadRune()
+		nextRuneType = tokenizer.classifier.Classify(nextRune)
 		if err != nil {
 			if err == io.EOF {
 				nextRuneType = RUNE_EOF
@@ -113,7 +116,7 @@ SCAN:
 					{
 						tokenType = TOKEN_WORD
 						value = append(value, nextRune)
-						state = STATE_APPEND
+						state = STATE_WORD
 					}
 				case RUNE_SPACE:
 					{
@@ -143,7 +146,7 @@ SCAN:
 					{
 						tokenType = TOKEN_REDIRECT
 						value = append(value, nextRune)
-						nr, _, err := t.input.ReadRune()
+						nr, _, err := tokenizer.input.ReadRune()
 						if err != nil {
 							if err == io.EOF {
 								nextRuneType = RUNE_EOF
@@ -155,7 +158,7 @@ SCAN:
 						if nr == nextRune {
 							value = append(value, nr)
 						} else {
-							t.input.UnreadRune()
+							tokenizer.input.UnreadRune()
 						}
 						state = STATE_EMIT
 					}
@@ -165,7 +168,7 @@ SCAN:
 					}
 				}
 			}
-		case STATE_APPEND: // in a regular word
+		case STATE_WORD: // in a regular word
 			{
 				switch nextRuneType {
 				case RUNE_EOF:
@@ -178,7 +181,7 @@ SCAN:
 					}
 				case RUNE_SPACE:
 					{
-						t.input.UnreadRune()
+						tokenizer.input.UnreadRune()
 						break SCAN
 					}
 				case RUNE_QUOTE_DOUBLE:
@@ -195,12 +198,12 @@ SCAN:
 					}
 				case RUNE_PIPE:
 					{
-						t.input.UnreadRune()
+						tokenizer.input.UnreadRune()
 						state = STATE_EMIT
 					}
 				case RUNE_REDIRECT:
 					{
-						t.input.UnreadRune()
+						tokenizer.input.UnreadRune()
 						state = STATE_EMIT
 					}
 				default:
@@ -220,7 +223,7 @@ SCAN:
 				case RUNE_CHAR, RUNE_SPACE, RUNE_QUOTE_DOUBLE, RUNE_QUOTE_SINGLE, RUNE_ESCAPE,
 					RUNE_PIPE, RUNE_REDIRECT:
 					{
-						state = STATE_APPEND
+						state = STATE_WORD
 						value = append(value, nextRune)
 					}
 				default:
@@ -264,7 +267,7 @@ SCAN:
 					}
 				case RUNE_QUOTE_DOUBLE:
 					{
-						state = STATE_APPEND
+						state = STATE_WORD
 					}
 				case RUNE_ESCAPE:
 					{
@@ -291,7 +294,7 @@ SCAN:
 					}
 				case RUNE_QUOTE_SINGLE:
 					{
-						state = STATE_APPEND
+						state = STATE_WORD
 					}
 				default:
 					{
@@ -332,17 +335,7 @@ SCAN:
 			}
 		}
 	}
-
-	token := &Token{
-		tokenType: tokenType,
-		value:     TokenValue(value),
-	}
-
-	return token, err
+	
+	return NewToken(tokenType, TokenValue(value)), err
 }
 
-// NextToken returns the next token in the stream, and an error value. If there are no more
-// tokens available, the error value will be io.EOF.
-func (t *Tokenizer) NextToken() (*Token, error) {
-	return t.scanStream()
-}

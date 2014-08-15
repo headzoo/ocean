@@ -45,14 +45,14 @@ func (lexer *Lexer) NextWord() (TokenValue, error) {
 			return "", err
 		}
 		
-		switch token.tokenType {
+		switch token.Class {
 		case TOKEN_WORD, TOKEN_PIPE, TOKEN_REDIRECT:
 			{
-				return token.value, nil
+				return token.Value, nil
 			}
 		default:
 			{
-				panic(fmt.Sprintf("Unknown token type: %v", token.tokenType))
+				panic(fmt.Sprintf("Unknown token type: %v", token.Class))
 			}
 		}
 	}

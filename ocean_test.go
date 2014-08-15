@@ -41,40 +41,18 @@ func TestClassifier(test *testing.T) {
 
 func TestTokenizer(test *testing.T) {
 	input := strings.NewReader(`one two "three four" "five \"six\"" \n eleven | sixteen > "seventeen eighteen" < nineteen`)
-	expected := []Token{
-		{
-			tokenType: TOKEN_WORD,
-			value:     "one"},
-		{
-			tokenType: TOKEN_WORD,
-			value:     "two"},
-		{
-			tokenType: TOKEN_WORD,
-			value:     "three four"},
-		{
-			tokenType: TOKEN_WORD,
-			value:     `five \"six\"`},
-		{
-			tokenType: TOKEN_WORD,
-			value:     "eleven"},
-		{
-			tokenType: TOKEN_PIPE,
-			value:     "|"},
-		{
-			tokenType: TOKEN_WORD,
-			value:     "sixteen"},
-		{
-			tokenType: TOKEN_REDIRECT,
-			value:     ">"},
-		{
-			tokenType: TOKEN_WORD,
-			value:     "seventeen eighteen"},
-		{
-			tokenType: TOKEN_REDIRECT,
-			value:     "<"},
-		{
-			tokenType: TOKEN_WORD,
-			value:     "nineteen"},
+	expected := []*Token{
+		NewToken(TOKEN_WORD, "one"),
+		NewToken(TOKEN_WORD, "two"),
+		NewToken(TOKEN_WORD, "three four"),
+		NewToken(TOKEN_WORD, `five \"six\"`),
+		NewToken(TOKEN_WORD, "eleven"),
+		NewToken(TOKEN_PIPE, "|"),
+		NewToken(TOKEN_WORD, "sixteen"),
+		NewToken(TOKEN_REDIRECT, ">"),
+		NewToken(TOKEN_WORD, "seventeen eighteen"),
+		NewToken(TOKEN_REDIRECT, "<"),
+		NewToken(TOKEN_WORD, "nineteen"),
 	}
 
 	tokenizer := NewTokenizer(input)
@@ -190,9 +168,9 @@ func (a *Token) Equal(b *Token) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	if a.tokenType != b.tokenType {
+	if a.Class != b.Class {
 		return false
 	}
 
-	return a.value == b.value
+	return a.Value == b.Value
 }
