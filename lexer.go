@@ -27,14 +27,8 @@ type Lexer struct {
 }
 
 // Creates and returns a new lexer.
-func NewLexer(reader io.Reader) (*Lexer, error) {
-	tokenizer, err := NewTokenizer(reader)
-	if err != nil {
-		return nil, err
-	}
-	lexer := &Lexer{tokenizer: tokenizer}
-
-	return lexer, nil
+func NewLexer(reader io.Reader) *Lexer {
+	return &Lexer{tokenizer: NewTokenizer(reader)}
 }
 
 // NextWord return the next word, and an error value. If there are no more words, the error
@@ -50,6 +44,7 @@ func (lexer *Lexer) NextWord() (TokenValue, error) {
 		if err != nil {
 			return "", err
 		}
+		
 		switch token.tokenType {
 		case TOKEN_WORD, TOKEN_PIPE, TOKEN_REDIRECT:
 			{

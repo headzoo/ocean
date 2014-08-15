@@ -77,9 +77,7 @@ func TestTokenizer(test *testing.T) {
 			value:     "nineteen"},
 	}
 
-	tokenizer, err := NewTokenizer(input)
-	assertNilError(err, test)
-
+	tokenizer := NewTokenizer(input)
 	for _, ex := range expected {
 		actual, err := tokenizer.NextToken()
 		assertNilError(err, test)
@@ -93,10 +91,7 @@ func TestLexer(test *testing.T) {
 	input := strings.NewReader("one")
 	expected := TokenValue("one")
 
-	lexer, err := NewLexer(input)
-	assertNilError(err, test)
-
-	actual, err := lexer.NextWord()
+	actual, err := NewLexer(input).NextWord()
 	assertNilError(err, test)
 
 	if expected != actual {

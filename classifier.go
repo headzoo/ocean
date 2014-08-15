@@ -15,6 +15,32 @@ limitations under the License.
 */
 package ocean
 
+// RuneType is the type of a UTF-8 character; a character, quote, space, escape.
+type RuneType string
+
+// RuneTypeMap is a map of RuneTokeType values.
+type RuneTypeMap map[rune]RuneType
+
+const (
+	CLASS_CHAR              string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#._-,/@$*()+=:;&^%~"
+	CLASS_SPACE             string = " \t\r\n"
+	CLASS_ESCAPING_QUOTE    string = "\""
+	CLASS_NONESCAPING_QUOTE string = "'"
+	CLASS_ESCAPE            string = "\\"
+	CLASS_PIPE              string = "|"
+	CLASS_REDIRECT          string = "><"
+
+	RUNE_UNKNOWN      RuneType = "UNKNOWN"
+	RUNE_CHAR         RuneType = "CHAR"
+	RUNE_SPACE        RuneType = "SPACE"
+	RUNE_QUOTE_DOUBLE RuneType = "QUOTE_DOUBLE"
+	RUNE_QUOTE_SINGLE RuneType = "QUOTE_SINGLE"
+	RUNE_ESCAPE       RuneType = "ESCAPE"
+	RUNE_PIPE         RuneType = "PIPE"
+	RUNE_REDIRECT     RuneType = "REDIRECT"
+	RUNE_EOF          RuneType = "EOF"
+)
+
 // Classifier classifies runes by type. This allows for different sorts of
 // classifiers - those accepting extended non-ascii chars, or strict posix
 // compatibility, for example.

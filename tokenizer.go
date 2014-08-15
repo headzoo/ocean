@@ -22,7 +22,28 @@ import (
 	"io"
 )
 
+// TokenType is a top-level token; a word, space, comment, unknown.
+type TokenType string
+
+// TokenValue is the value of the token, usually a string.
+type TokenValue string
+
+// LexerState is used within the lexer state machine to keep track of the current state.
+type LexerState int
+
+// Token represents a single "token" found within a stream.
+type Token struct {
+	tokenType TokenType
+	value     TokenValue
+}
+
 const (
+	TOKEN_UNKNOWN  TokenType = "UNKNOWN"
+	TOKEN_WORD     TokenType = "WORD"
+	TOKEN_SPACE    TokenType = "SPACE"
+	TOKEN_PIPE     TokenType = "PIPE"
+	TOKEN_REDIRECT TokenType = "REDIRECT"
+	
 	STATE_START           LexerState = 0
 	STATE_APPEND          LexerState = 1
 	STATE_ESCAPING        LexerState = 2
@@ -31,6 +52,8 @@ const (
 	STATE_QUOTED          LexerState = 5
 	STATE_COMMENT         LexerState = 6
 	STATE_EMIT            LexerState = 7
+
+	INITIAL_TOKEN_CAPACITY = 100
 )
 
 // Tokenizer turns an input stream in to a sequence of typed tokens.
@@ -40,7 +63,7 @@ type Tokenizer struct {
 }
 
 // Creates and returns a new tokenizer.
-func NewTokenizer(reader io.Reader) (*Tokenizer, error) {
+func NewTokenizer(reader io.Reader) *Tokenizer {
 	input := bufio.NewReader(reader)
 	classifier := NewClassifier()
 	tokenizer := &Tokenizer{
@@ -48,7 +71,7 @@ func NewTokenizer(reader io.Reader) (*Tokenizer, error) {
 		classifier: classifier,
 	}
 
-	return tokenizer, nil
+	return tokenizer
 }
 
 // scanStream scans the stream for the next token.
