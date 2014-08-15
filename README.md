@@ -35,5 +35,17 @@ fmt.Printf("%q", val)
 // outputs: ["one", "|", "two three", ">", "output.txt"]
 ```
 
+### Installing
+Use the 'go get' command to download the package.
+```bash
+go get github.com/headzoo/ocean
+```
+
+Then import the package into your project.
+```go
+import "github.com/headzoo/ocean"
+```
+
+
 ### Credits
 Ocean is an indirect fork of [go-shlex](http://code.google.com/p/go-shlex/) written by Steven Thurgood. Contributions were make by Jonathan Rudenberg through his fork [flynn/go-shlex](https://github.com/flynn/go-shlex).
