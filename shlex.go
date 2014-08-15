@@ -60,12 +60,15 @@ func (a *Token) Equal(b *Token) bool {
 }
 
 const (
-	RUNE_CHAR              string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-,/@$*()+=><:;&^%~|"
+	RUNE_CHAR              string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-,/@$*()+=:;&^%~"
 	RUNE_SPACE             string = " \t\r\n"
 	RUNE_ESCAPING_QUOTE    string = "\""
 	RUNE_NONESCAPING_QUOTE string = "'"
 	RUNE_ESCAPE                   = "\\"
 	RUNE_COMMENT                  = "#"
+	RUNE_PIPE				      = "|"
+	RUNE_REDIRECT_OUT			  = ">"
+	RUNE_REDIRECT_IN              = "<"
 
 	RUNETOKEN_UNKNOWN           RuneTokenType = 0
 	RUNETOKEN_CHAR              RuneTokenType = 1
@@ -74,12 +77,20 @@ const (
 	RUNETOKEN_NONESCAPING_QUOTE RuneTokenType = 4
 	RUNETOKEN_ESCAPE            RuneTokenType = 5
 	RUNETOKEN_COMMENT           RuneTokenType = 6
-	RUNETOKEN_EOF               RuneTokenType = 7
+	RUNETOKEN_PIPE			    RuneTokenType = 7
+	RUNETOKEN_REDIRECT_OUT      RuneTokenType = 8
+	RUNETOKEN_REDIRECT_IN       RuneTokenType = 9
+	RUNETOKEN_APPEND_OUT        RuneTokenType = 10
+	RUNETOKEN_APPEND_IN         RuneTokenType = 11
+	RUNETOKEN_EOF               RuneTokenType = 12
 
-	TOKEN_UNKNOWN TokenType = 0
-	TOKEN_WORD    TokenType = 1
-	TOKEN_SPACE   TokenType = 2
-	TOKEN_COMMENT TokenType = 3
+	TOKEN_UNKNOWN 		TokenType = 0
+	TOKEN_WORD    		TokenType = 1
+	TOKEN_SPACE   		TokenType = 2
+	TOKEN_COMMENT 		TokenType = 3
+	TOKEN_PIPE   		TokenType = 4
+	TOKEN_REDIRECT_OUT	TokenType = 5
+	TOKEN_REDIRECT_IN   TokenType = 6
 
 	STATE_START           lexerState = 0
 	STATE_INWORD          lexerState = 1
@@ -88,6 +99,7 @@ const (
 	STATE_QUOTED_ESCAPING lexerState = 4
 	STATE_QUOTED          lexerState = 5
 	STATE_COMMENT         lexerState = 6
+	STATE_EMIT            lexerState = 7
 
 	INITIAL_TOKEN_CAPACITY int = 100
 )
@@ -118,6 +130,9 @@ func NewDefaultClassifier() *TokenClassifier {
 	addRuneClass(&typeMap, RUNE_NONESCAPING_QUOTE, RUNETOKEN_NONESCAPING_QUOTE)
 	addRuneClass(&typeMap, RUNE_ESCAPE, RUNETOKEN_ESCAPE)
 	addRuneClass(&typeMap, RUNE_COMMENT, RUNETOKEN_COMMENT)
+	addRuneClass(&typeMap, RUNE_PIPE, RUNETOKEN_PIPE)
+	addRuneClass(&typeMap, RUNE_REDIRECT_OUT, RUNETOKEN_REDIRECT_OUT)
+	addRuneClass(&typeMap, RUNE_REDIRECT_IN, RUNETOKEN_REDIRECT_IN)
 	return &TokenClassifier{
 		typeMap: typeMap}
 }
@@ -168,6 +183,18 @@ func (l *Lexer) NextWord() (string, error) {
 			{
 				// skip comments
 			}
+		case TOKEN_PIPE:
+			{
+				return "|", nil
+			}
+		case TOKEN_REDIRECT_OUT:
+			{
+				return ">", nil
+			}
+		case TOKEN_REDIRECT_IN:
+			{
+				return "<", nil
+			}
 		default:
 			{
 				panic(fmt.Sprintf("Unknown token type: %v", token.tokenType))
@@ -213,7 +240,7 @@ func (t *Tokenizer) scanStream() (*Token, error) {
 		err          error
 	)
 SCAN:
-	for {
+	for state != STATE_EMIT {
 		nextRune, _, err = t.input.ReadRune()
 		nextRuneType = t.classifier.ClassifyRune(nextRune)
 		if err != nil {
@@ -224,6 +251,7 @@ SCAN:
 				return nil, err
 			}
 		}
+		
 		switch state {
 		case STATE_START: // no runes read yet
 			{
@@ -261,6 +289,24 @@ SCAN:
 						tokenType = TOKEN_COMMENT
 						state = STATE_COMMENT
 					}
+				case RUNETOKEN_PIPE:
+					{
+						tokenType = TOKEN_PIPE
+						value = append(value, nextRune)
+						state = STATE_EMIT
+					}
+				case RUNETOKEN_REDIRECT_OUT:
+					{
+						tokenType = TOKEN_REDIRECT_OUT
+						value = append(value, nextRune)
+						state = STATE_EMIT
+					}
+				case RUNETOKEN_REDIRECT_IN:
+					{
+						tokenType = TOKEN_REDIRECT_IN
+						value = append(value, nextRune)
+						state = STATE_EMIT
+					}
 				default:
 					{
 						return nil, errors.New(fmt.Sprintf("Unknown rune: %v", nextRune))
@@ -295,6 +341,21 @@ SCAN:
 					{
 						state = STATE_ESCAPING
 					}
+				case RUNETOKEN_PIPE:
+					{
+						t.input.UnreadRune()
+						state = STATE_EMIT
+					}
+				case RUNETOKEN_REDIRECT_OUT:
+					{
+						t.input.UnreadRune()
+						state = STATE_EMIT
+					}
+				case RUNETOKEN_REDIRECT_IN:
+					{
+						t.input.UnreadRune()
+						state = STATE_EMIT
+					}
 				default:
 					{
 						return nil, errors.New(fmt.Sprintf("Uknown rune: %v", nextRune))
@@ -309,7 +370,8 @@ SCAN:
 						err = errors.New("EOF found after escape character")
 						break SCAN
 					}
-				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_ESCAPE, RUNETOKEN_COMMENT:
+				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_ESCAPE,
+				RUNETOKEN_COMMENT, RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
 					{
 						state = STATE_INWORD
 						value = append(value, nextRune)
@@ -328,7 +390,8 @@ SCAN:
 						err = errors.New("EOF found after escape character")
 						break SCAN
 					}
-				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_ESCAPE, RUNETOKEN_COMMENT:
+				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_ESCAPE,
+				RUNETOKEN_COMMENT, RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
 					{
 						state = STATE_QUOTED_ESCAPING
 						value = append(value, nextRune)
@@ -347,7 +410,8 @@ SCAN:
 						err = errors.New("EOF found when expecting closing quote.")
 						break SCAN
 					}
-				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_COMMENT:
+				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_COMMENT,
+				RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
 					{
 						value = append(value, nextRune)
 					}
@@ -373,7 +437,8 @@ SCAN:
 						err = errors.New("EOF found when expecting closing quote.")
 						break SCAN
 					}
-				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_ESCAPE, RUNETOKEN_COMMENT:
+				case RUNETOKEN_CHAR, RUNETOKEN_SPACE, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_ESCAPE,
+				RUNETOKEN_COMMENT, RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
 					{
 						value = append(value, nextRune)
 					}
@@ -394,7 +459,8 @@ SCAN:
 					{
 						break SCAN
 					}
-				case RUNETOKEN_CHAR, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_ESCAPE, RUNETOKEN_COMMENT, RUNETOKEN_NONESCAPING_QUOTE:
+				case RUNETOKEN_CHAR, RUNETOKEN_ESCAPING_QUOTE, RUNETOKEN_ESCAPE, RUNETOKEN_COMMENT,
+				RUNETOKEN_NONESCAPING_QUOTE, RUNETOKEN_PIPE, RUNETOKEN_REDIRECT_OUT, RUNETOKEN_REDIRECT_IN:
 					{
 						value = append(value, nextRune)
 					}
@@ -419,9 +485,11 @@ SCAN:
 			}
 		}
 	}
+	
 	token := &Token{
 		tokenType: tokenType,
 		value:     string(value)}
+	
 	return token, err
 }
 

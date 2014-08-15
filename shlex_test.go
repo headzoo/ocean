@@ -34,7 +34,11 @@ func TestClassifier(t *testing.T) {
 		' ':  RUNETOKEN_SPACE,
 		'"':  RUNETOKEN_ESCAPING_QUOTE,
 		'\'': RUNETOKEN_NONESCAPING_QUOTE,
-		'#':  RUNETOKEN_COMMENT}
+		'#':  RUNETOKEN_COMMENT,
+		'|': RUNETOKEN_PIPE,
+		'>': RUNETOKEN_REDIRECT_OUT,
+		'<': RUNETOKEN_REDIRECT_IN,
+	}
 	for rune, expectedType := range runeTests {
 		foundType := classifier.ClassifyRune(rune)
 		if foundType != expectedType {
@@ -45,7 +49,7 @@ func TestClassifier(t *testing.T) {
 }
 
 func TestTokenizer(t *testing.T) {
-	testInput := strings.NewReader("one two \"three four\" \"five \\\"six\\\"\" seven#eight # nine # ten\n eleven")
+	testInput := strings.NewReader("one two \"three four\" \"five \\\"six\\\"\" seven#eight # nine # ten\n eleven | sixteen > \"seventeen eighteen\" < nineteen")
 	expectedTokens := []*Token{
 		&Token{
 			tokenType: TOKEN_WORD,
@@ -67,7 +71,26 @@ func TestTokenizer(t *testing.T) {
 			value:     " nine # ten"},
 		&Token{
 			tokenType: TOKEN_WORD,
-			value:     "eleven"}}
+			value:     "eleven"},
+		&Token{
+			tokenType: TOKEN_PIPE,
+			value:     "|"},
+		&Token{
+			tokenType: TOKEN_WORD,
+			value:     "sixteen"},
+		&Token{
+			tokenType: TOKEN_REDIRECT_OUT,
+			value:	   ">"},
+		&Token{
+			tokenType: TOKEN_WORD,
+			value:     "seventeen eighteen"},
+		&Token{
+			tokenType: TOKEN_REDIRECT_IN,
+			value:     "<"},
+		&Token{
+			tokenType: TOKEN_WORD,
+			value:     "nineteen"},
+		}
 
 	tokenizer, err := NewTokenizer(testInput)
 	checkError(err, t)
@@ -93,52 +116,80 @@ func TestLexer(t *testing.T) {
 }
 
 func TestSplitSimple(t *testing.T) {
-	testInput := "one two three"
-	expectedOutput := []string{"one", "two", "three"}
-	foundOutput, err := Split(testInput)
-	if err != nil {
-		t.Error("Split returned error:", err)
-	}
-	if len(expectedOutput) != len(foundOutput) {
-		t.Error("Split expected:", len(expectedOutput), "results. Found:", len(foundOutput), "results")
-	}
-	for i := range foundOutput {
-		if foundOutput[i] != expectedOutput[i] {
-			t.Error("Item:", i, "(", foundOutput[i], ") differs from the expected value:", expectedOutput[i])
-		}
-	}
+	assertSplit(
+		"one two three",
+		[]string{"one", "two", "three"},
+		t,
+	)
 }
 
 func TestSplitEscapingQuotes(t *testing.T) {
-	testInput := "one \"two three\" four"
-	expectedOutput := []string{"one", "two three", "four"}
-	foundOutput, err := Split(testInput)
-	if err != nil {
-		t.Error("Split returned error:", err)
-	}
-	if len(expectedOutput) != len(foundOutput) {
-		t.Error("Split expected:", len(expectedOutput), "results. Found:", len(foundOutput), "results")
-	}
-	for i := range foundOutput {
-		if foundOutput[i] != expectedOutput[i] {
-			t.Error("Item:", i, "(", foundOutput[i], ") differs from the expected value:", expectedOutput[i])
-		}
-	}
+	assertSplit(
+		"one \"two three\" four",
+		[]string{"one", "two three", "four"},
+		t,
+	)
 }
 
 func TestSplitNonEscapingQuotes(t *testing.T) {
-	testInput := "one 'two three' four"
-	expectedOutput := []string{"one", "two three", "four"}
-	foundOutput, err := Split(testInput)
+	assertSplit(
+		"one 'two three' four",
+		[]string{"one", "two three", "four"},
+		t,
+	)
+}
+
+func TestSplitPiped(t *testing.T) {
+	assertSplit(
+		"one two|three four",
+		[]string{"one", "two", "|", "three", "four"},
+		t,
+	)
+}
+
+func TestSplitRedirectOut(t *testing.T) {
+	assertSplit(
+		"one two > three.txt",
+		[]string{"one", "two", ">", "three.txt"},
+		t,
+	)
+}
+
+func TestSplitRedirectIn(t *testing.T) {
+	assertSplit(
+		"one < two.txt",
+		[]string{"one", "<", "two.txt"},
+		t,
+	)
+}
+/*
+func TestSplitComplex(t *testing.T) {
+	assertSplit(
+		"ls -l /|grep 'foo.txt' >> saved.txt",
+		[]string{"ls", "-l", "/", "|", "grep", "foo.txt", ">>", "saved.txt"},
+		t,
+	)
+}
+*/
+
+
+// assertSplit splits the string, and asserts it's equal to the expected value.
+func assertSplit(input string, expected []string, t *testing.T) {
+	actual, err := Split(input)
 	if err != nil {
 		t.Error("Split returned error:", err)
 	}
-	if len(expectedOutput) != len(foundOutput) {
-		t.Error("Split expected:", len(expectedOutput), "results. Found:", len(foundOutput), "results")
+	assertSliceEquals(expected, actual, t)
+}
+
+// assertSliceEquals asserts that two slices are equal.
+func assertSliceEquals(expected, actual []string, t *testing.T) {
+	if len(expected) != len(actual) {
+		t.Error("Split expected:", len(expected), "results. Found:", len(actual), "results")
 	}
-	for i := range foundOutput {
-		if foundOutput[i] != expectedOutput[i] {
-			t.Error("Item:", i, "(", foundOutput[i], ") differs from the expected value:", expectedOutput[i])
+	for i := range actual {
+		if actual[i] != expected[i] {
+			t.Error("Item:", i, "(", actual[i], ") differs from the expected value:", expected[i])
 		}
 	}
 }
