@@ -196,7 +196,7 @@ SCAN:
 					}
 				default:
 					{
-						return nil, errorf("Uknown rune: %v", next)
+						return nil, errorf("Unknown rune: %v", next)
 					}
 				}
 			}
@@ -216,7 +216,7 @@ SCAN:
 					}
 				default:
 					{
-						return nil, errorf("Uknown rune: %v", next)
+						return nil, errorf("Unknown rune: %v", next)
 					}
 				}
 			}
@@ -236,7 +236,7 @@ SCAN:
 					}
 				default:
 					{
-						return nil, errorf("Uknown rune: %v", next)
+						return nil, errorf("Unknown rune: %v", next)
 					}
 				}
 			}
@@ -263,7 +263,7 @@ SCAN:
 					}
 				default:
 					{
-						return nil, errorf("Uknown rune: %v", next)
+						return nil, errorf("Unknown rune: %v", next)
 					}
 				}
 			}
@@ -286,7 +286,7 @@ SCAN:
 					}
 				default:
 					{
-						return nil, errorf("Uknown rune: %v", next)
+						return nil, errorf("Unknown rune: %v", next)
 					}
 				}
 			}
@@ -313,7 +313,7 @@ SCAN:
 					}
 				default:
 					{
-						return nil, errorf("Uknown rune: %v", next)
+						return nil, errorf("Unknown rune: %v", next)
 					}
 				}
 			}
